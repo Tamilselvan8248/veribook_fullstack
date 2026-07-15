@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link } from 'react-router-dom';
-import { Wallet as WalletIcon, ArrowUpRight, ArrowDownLeft, Lock, CheckCircle, Clock, Loader, Plus, HandshakeIcon, Check } from 'lucide-react';
+import { Wallet as WalletIcon, ArrowUpRight, ArrowDownLeft, Lock, CheckCircle, Clock, Loader, Plus, HandshakeIcon, Check, XCircle } from 'lucide-react';
 import api from '../utils/api';
 import { useToast } from '../context/ToastContext';
 import { useAuth } from '../context/AuthContext';
@@ -64,6 +64,14 @@ export default function Wallet() {
       const res = await api.post(`/transactions/${txId}/confirm`);
       if (res.success) { showToast('Delivery confirmed! Funds released.', 'success'); await updateCachedProfile(); await loadData(); }
     } catch (err) { showToast(err.message || 'Failed', 'error'); }
+  };
+
+  const cancelTx = async (txId) => {
+    if (!window.confirm('Are you sure you want to cancel this transaction? Escrow funds will be returned.')) return;
+    try {
+      const res = await api.post(`/transactions/${txId}/cancel`);
+      if (res.success) { showToast('Transaction cancelled.', 'success'); await updateCachedProfile(); await loadData(); }
+    } catch (err) { showToast(err.message || 'Failed to cancel', 'error'); }
   };
 
   return (
@@ -188,6 +196,11 @@ export default function Wallet() {
                             {!userConfirmed && (
                               <button onClick={() => confirmDelivery(tx._id)} className="btn btn-primary btn-sm">
                                 <Check size={13} /> Confirm Delivery
+                              </button>
+                            )}
+                            {!userConfirmed && (
+                              <button onClick={() => cancelTx(tx._id)} className="btn btn-secondary btn-sm" style={{ color: 'var(--red)', border: '1px solid rgba(248,113,113,0.3)' }}>
+                                <XCircle size={13} /> Cancel
                               </button>
                             )}
                           </div>

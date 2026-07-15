@@ -207,6 +207,62 @@ router.post('/:id/confirm', protect, async (req, res) => {
   }
 });
 
+// @desc    Cancel a transaction (Buyer/Seller)
+// @route   POST /api/transactions/:id/cancel
+// @access  Private
+router.post('/:id/cancel', protect, async (req, res) => {
+  try {
+    const transaction = await Transaction.findById(req.params.id).populate('book buyer seller');
+    if (!transaction) {
+      return res.status(404).json({ success: false, message: 'Transaction not found' });
+    }
+
+    const userId = req.user._id.toString();
+    const isBuyer = transaction.buyer._id.toString() === userId;
+    const isSeller = transaction.seller._id.toString() === userId;
+
+    if (!isBuyer && !isSeller) {
+      return res.status(403).json({ success: false, message: 'Not authorized' });
+    }
+
+    if (transaction.status === 'COMPLETED' || transaction.status === 'CANCELLED') {
+      return res.status(400).json({ success: false, message: 'Transaction is already finalized' });
+    }
+
+    const buyer = await User.findById(transaction.buyer._id);
+    const book = await Book.findById(transaction.book._id);
+
+    // Refund buyer
+    buyer.pendingEscrow -= transaction.price;
+    buyer.walletBalance += transaction.price;
+    await buyer.save();
+
+    // Reset book status
+    book.status = 'AVAILABLE';
+    await book.save();
+
+    // Update transaction status
+    transaction.status = 'CANCELLED';
+    await transaction.save();
+
+    // Notify other party
+    const targetUser = isBuyer ? transaction.seller._id : transaction.buyer._id;
+    const cancelledBy = isBuyer ? 'Buyer' : 'Seller';
+    await Notification.create({
+      user: targetUser,
+      type: 'SYSTEM',
+      title: 'Transaction Cancelled',
+      message: `The ${cancelledBy.toLowerCase()} cancelled the transaction for "${book.title}". Your book is back on the marketplace.`,
+      relatedLink: `/wallet.html`,
+    });
+
+    res.json({ success: true, transaction });
+  } catch (error) {
+    console.error(error);
+    res.status(500).json({ success: false, message: 'Server error' });
+  }
+});
+
 // @desc    Get current user wallet status & transactions list
 // @route   GET /api/transactions/wallet
 // @access  Private
