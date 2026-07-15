@@ -1,0 +1,98 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>VeriBook - Camera & Barcode Test</title>
+  <!-- Load ZXing from CDN -->
+  <script src="https://unpkg.com/@zxing/library@0.19.1/umd/index.min.js"></script>
+  <style>
+    body { font-family: system-ui, sans-serif; background: #0f172a; color: white; display: flex; flex-direction: column; align-items: center; padding: 2rem; }
+    h1 { margin-bottom: 0.5rem; }
+    .card { background: #1e293b; padding: 2rem; border-radius: 12px; box-shadow: 0 10px 15px -3px rgba(0,0,0,0.5); max-width: 600px; width: 100%; text-align: center; }
+    .video-container { position: relative; width: 100%; aspect-ratio: 4/3; background: #000; border-radius: 8px; overflow: hidden; margin: 1.5rem 0; border: 2px solid #334155; }
+    video { width: 100%; height: 100%; object-fit: cover; }
+    button { background: #6366f1; color: white; border: none; padding: 10px 20px; font-size: 1rem; border-radius: 6px; cursor: pointer; font-weight: bold; }
+    button:hover { background: #4f46e5; }
+    .result { margin-top: 1.5rem; padding: 1rem; background: #064e3b; border: 1px solid #059669; border-radius: 6px; display: none; }
+    .result h3 { margin: 0 0 0.5rem 0; color: #34d399; }
+    .laser { position: absolute; top: 50%; left: 10%; right: 10%; height: 2px; background: rgba(239, 68, 68, 0.8); box-shadow: 0 0 10px red; display: none; }
+  </style>
+</head>
+<body>
+
+  <div class="card">
+    <h1>Hardware Diagnostic</h1>
+    <p style="color: #94a3b8; margin-top: 0;">Test the ZXing Barcode Scanner independently.</p>
+    
+    <div class="video-container">
+      <video id="video" muted playsinline></video>
+      <div class="laser" id="laser"></div>
+    </div>
+
+    <button id="startBtn" onclick="startScanner()">Start Camera & Scanner</button>
+
+    <div class="result" id="resultBox">
+      <h3>Scan Successful!</h3>
+      <p>ISBN Detected: <strong id="isbnResult" style="font-size: 1.25rem;"></strong></p>
+    </div>
+  </div>
+
+  <script>
+    let codeReader;
+
+    async function startScanner() {
+      const btn = document.getElementById('startBtn');
+      const video = document.getElementById('video');
+      const laser = document.getElementById('laser');
+      const resultBox = document.getElementById('resultBox');
+      
+      btn.textContent = 'Initializing Camera...';
+      btn.disabled = true;
+
+      try {
+        codeReader = new ZXing.BrowserBarcodeReader();
+        const videoInputDevices = await codeReader.listVideoInputDevices();
+        
+        if (videoInputDevices.length === 0) {
+          throw new Error("No cameras found on this device.");
+        }
+
+        // Try to find a back camera
+        let selectedDeviceId = videoInputDevices[0].deviceId;
+        const backCamera = videoInputDevices.find(d => d.label.toLowerCase().includes('back') || d.label.toLowerCase().includes('environment'));
+        if (backCamera) {
+          selectedDeviceId = backCamera.deviceId;
+        }
+
+        laser.style.display = 'block';
+        btn.textContent = 'Scanning...';
+
+        codeReader.decodeFromVideoDevice(selectedDeviceId, 'video', (result, err) => {
+          if (result) {
+            const isbn = result.text;
+            document.getElementById('isbnResult').textContent = isbn;
+            resultBox.style.display = 'block';
+            codeReader.reset();
+            laser.style.display = 'none';
+            btn.textContent = 'Scan Again';
+            btn.disabled = false;
+            
+            // Optional beep
+            const ctx = new (window.AudioContext || window.webkitAudioContext)();
+            const osc = ctx.createOscillator();
+            osc.type = 'sine'; osc.frequency.setValueAtTime(800, ctx.currentTime);
+            osc.connect(ctx.destination); osc.start(); osc.stop(ctx.currentTime + 0.1);
+          }
+        });
+
+      } catch (err) {
+        console.error(err);
+        alert("Camera Error: " + err.message);
+        btn.textContent = 'Retry Camera';
+        btn.disabled = false;
+      }
+    }
+  </script>
+</body>
+</html>
